@@ -1,0 +1,42 @@
+import os
+import dnnlib
+import legacy
+import torch
+import numpy as np
+from PIL import Image
+
+# Load pre-trained model
+def load_model(model_path):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    with dnnlib.util.open_url(model_path) as f:
+        G = legacy.load_network_pkl(f)['G_ema'].to(device)  # Load the pre-trained generator
+    return G
+
+# Generate image
+def generate_image(G, seed, truncation=0.7):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    z = np.random.RandomState(seed).randn(1, G.z_dim)  # Generate latent vector
+    label = torch.zeros([1, G.c_dim], device=device)
+    img = G(torch.from_numpy(z).to(device), label, truncation_psi=truncation, noise_mode='const')
+    img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)
+    return img[0].cpu().numpy()
+
+# Save the generated image
+def save_image(img_array, save_path):
+    img = Image.fromarray(img_array, 'RGB')
+    img.save(save_path)
+
+if __name__ == "__main__":
+    model_path = 'path_to_pretrained_model.pkl'  # Path to the pre-trained model
+    output_dir = 'generated_images'
+    os.makedirs(output_dir, exist_ok=True)
+
+    G = load_model(model_path)
+    
+    # Generate and save 10 images
+    for i in range(10):
+        seed = np.random.randint(10000)
+        img = generate_image(G, seed)
+        save_path = os.path.join(output_dir, f'image_{seed}.png')
+        save_image(img, save_path)
+        print(f'Image saved: {save_path}')
